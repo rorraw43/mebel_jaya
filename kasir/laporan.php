@@ -1,0 +1,20 @@
+<?php
+session_start();
+include '../koneksi.php';
+/** @var mysqli $koneksi */
+if (!isset($_SESSION['login']) || $_SESSION['role'] != 'kasir') { header('Location: ../login.php'); exit; }
+include 'header.php';
+$uid=(int)$_SESSION['id_user']; $dari=$_GET['dari']??''; $sampai=$_GET['sampai']??'';
+?>
+<div class="container py-4">
+<div class="mb-4"><h2 class="fw-bold mb-1">Laporan Penjualan</h2><p class="text-secondary mb-0">Gunakan rentang tanggal untuk melihat pendapatan dan transaksi.</p></div>
+<div class="card shadow-sm mb-4"><div class="card-body"><form method="GET"><div class="row g-3"><div class="col-md-5"><label class="form-label fw-semibold">Dari tanggal</label><input type="date" name="dari" value="<?= htmlspecialchars($dari) ?>" class="form-control" required></div><div class="col-md-5"><label class="form-label fw-semibold">Sampai tanggal</label><input type="date" name="sampai" value="<?= htmlspecialchars($sampai) ?>" class="form-control" required></div><div class="col-md-2 d-flex align-items-end"><button class="btn btn-dark w-100">Tampilkan</button></div></div></form></div></div>
+<?php if($dari && $sampai && $dari <= $sampai){
+$dariSql=mysqli_real_escape_string($koneksi,$dari); $sampaiSql=mysqli_real_escape_string($koneksi,$sampai);
+$data=mysqli_query($koneksi,"SELECT p.id_penjualan,p.tanggal,COALESCE(pl.nama,'Pelanggan Umum') nama,COALESCE(SUM(d.subtotal),0) total FROM penjualan p LEFT JOIN pelanggan pl ON p.id_pelanggan=pl.id_pelanggan LEFT JOIN detail_penjualan d ON p.id_penjualan=d.id_penjualan WHERE p.id_user=$uid AND p.tanggal BETWEEN '$dariSql' AND '$sampaiSql' GROUP BY p.id_penjualan ORDER BY p.id_penjualan DESC");
+$ring=mysqli_fetch_assoc(mysqli_query($koneksi,"SELECT COUNT(DISTINCT p.id_penjualan) transaksi,COALESCE(SUM(d.jumlah),0) barang,COALESCE(SUM(d.subtotal),0) pendapatan FROM penjualan p LEFT JOIN detail_penjualan d ON p.id_penjualan=d.id_penjualan WHERE p.id_user=$uid AND p.tanggal BETWEEN '$dariSql' AND '$sampaiSql'"));
+?>
+<div class="row g-3 mb-4"><div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary">Total Transaksi</div><h3 class="fw-bold mb-0"><?= $ring['transaksi'] ?></h3></div></div></div><div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary">Barang Terjual</div><h3 class="fw-bold mb-0"><?= $ring['barang'] ?></h3></div></div></div><div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><div class="text-secondary">Pendapatan</div><h3 class="fw-bold mb-0">Rp <?= number_format($ring['pendapatan'],0,',','.') ?></h3></div></div></div></div>
+<div class="card shadow-sm"><div class="card-header bg-dark text-white d-flex justify-content-between align-items-center"><span class="fw-bold">Hasil Laporan</span><a target="_blank" href="laporan_cetak.php?dari=<?= urlencode($dari) ?>&sampai=<?= urlencode($sampai) ?>" class="btn btn-light btn-sm">Cetak Laporan</a></div><div class="card-body table-responsive"><table class="table table-bordered table-hover mb-0"><thead class="table-dark"><tr><th>No</th><th>Invoice</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th></tr></thead><tbody><?php $no=1; while($d=mysqli_fetch_assoc($data)){ ?><tr><td><?= $no++ ?></td><td>INV-<?= str_pad($d['id_penjualan'],4,'0',STR_PAD_LEFT) ?></td><td><?= date('d/m/Y',strtotime($d['tanggal'])) ?></td><td><?= htmlspecialchars($d['nama']) ?></td><td>Rp <?= number_format($d['total'],0,',','.') ?></td></tr><?php } if($no===1){ ?><tr><td colspan="5" class="text-center text-secondary">Tidak ada transaksi pada periode ini.</td></tr><?php } ?></tbody><tfoot><tr><th colspan="4" class="text-end">Total Pendapatan</th><th>Rp <?= number_format($ring['pendapatan'],0,',','.') ?></th></tr></tfoot></table></div></div>
+<?php } elseif($dari || $sampai){ ?><div class="alert alert-warning">Pastikan tanggal awal tidak lebih besar dari tanggal akhir.</div><?php } ?>
+</div></body></html>
